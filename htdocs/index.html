@@ -1,0 +1,98 @@
+<html>
+<head>
+<!-- <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1.5"/> -->
+<meta name="viewport" content="width=device-width, user-scalable=yes, width=450"/>
+<script type="text/javascript">
+    function update(type) {
+      var $http;
+      $self = arguments.callee;
+      if (window.XMLHttpRequest) {
+        $http = new XMLHttpRequest();
+      } else if (window.ActiveXObject) {
+        try {
+          $http = new ActiveXObject('Msxml2.XMLHTTP');
+        } catch (e) {
+          $http = new ActiveXObject('Microsoft.XMLHTTP');
+        }
+      }
+      if ($http) {
+        $http.onreadystatechange = function() {
+          if (/4|^complete$/.test($http.readyState)) {
+            var status = null;
+            var data = JSON.parse($http.responseText);
+            for (var obj in data) {
+              if ( obj == "name" )
+              {
+                div = document.getElementById(obj);
+                if (div != null) {
+                  div.innerHTML = data[obj];
+                }
+              }
+			  if ( obj == "title" )
+			  {
+			    document.title = data[obj];
+			  }
+			  else if ( obj.search("28-") != -1 )
+              {
+			    div = document.getElementById(obj+".value");
+                if (div != null && data[obj]["value"] != null) {
+				  div.innerHTML = data[obj]["value"] + " &deg;f"
+				}
+			  }
+              else if ( obj.search("pin[0-1]") != -1 )
+              {
+                div = document.getElementById(obj+".name");
+                if (div != null && data[obj]["name"] != null) {
+                  div.innerHTML = data[obj]["name"];
+                }
+                div = document.getElementById(obj+".status");
+                if (div != null && data[obj]["status"] != null) {
+                  if (data[obj]["status"] == 0)
+                    div.innerHTML = "<input type=\"image\" width=\"100\" height=\"53\" style=\"outline:none\" onclick=\"update('a=2&p="+data[obj]["pin"]+"&s=1');\" src=\"black-on.png\"/>";
+                  else if (data[obj]["status"] == 1)
+                    div.innerHTML = "<input type=\"image\" width=\"100\" height=\"53\" style=\"outline:none\" onclick=\"update('a=2&p="+data[obj]["pin"]+"&s=0');\" src=\"black-off.png\"/>";
+                }
+              }
+              else
+              {}
+            }
+          }
+        }
+        if (type == 'a=readall') { setTimeout(function(){$self(type);}, 5000); }
+      };
+      $http.open('GET', location.protocol + '//' + location.host + '/gpio?' + type, true);
+      $http.send(null);
+      
+      //document.getElementById('status').innerHTML = label;
+    }
+  </script>
+<STYLE TYPE="text/css"> 
+BODY { 
+  color:white; 
+  background-color:black; 
+  font-family:sans-serif;
+} 
+</STYLE>
+</head>
+<body background="black.png" onload="update('a=readall');">
+
+<table>
+<tr align="center"><th colspan="2">
+<div id="name"></div>
+</th><tr align="center"><td>
+<div id="pin0.name">-</div>
+</td><td>
+<div id="pin1.name">-</div>
+</td></tr><td>
+<div id="pin0.status"></div>
+</td><td>
+<div id="pin1.status">-</div>
+</td></tr>
+<tr align="center"><td colspan="2">
+<table><tr><td>Water temperature</td><td>
+<div id="28-011564c516ff.value"></div>
+</td></tr></table>
+</td>
+</table>
+</body>
+</html>

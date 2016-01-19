@@ -1,0 +1,224 @@
+<html>
+<head>
+
+<script type="text/javascript">
+
+function ismobile() { 
+  if( navigator.userAgent.match(/Android/i)
+   || navigator.userAgent.match(/webOS/i)
+   || navigator.userAgent.match(/iPhone/i)
+   || navigator.userAgent.match(/iPad/i)
+   || navigator.userAgent.match(/iPod/i)
+   || navigator.userAgent.match(/BlackBerry/i)
+   || navigator.userAgent.match(/Windows Phone/i))
+  {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+function reset() {
+  document.getElementById('Rslider').value = 0;
+  document.getElementById('Gslider').value = 0;
+  document.getElementById('Bslider').value = 0;
+  var label = document.getElementById('result');
+  label.innerHTML = '&nbsp;';
+  //label.style.backgroundColor = "#000000";
+  label.style.backgroundColor = 'transparent';
+}
+
+
+function colorPicker() {
+  var mobile = ismobile();
+  var canvas = document.getElementById('Cpicker');
+  var contex = canvas.getContext('2d');
+  var doc = document;
+  var label = document.getElementById('result');
+  var img = new Image();
+  var Rslider = document.getElementById('Rslider');
+  var Gslider = document.getElementById('Gslider');
+  var Bslider = document.getElementById('Bslider');
+
+  img.src = 'colorwheel.png';
+  img.onload = function() {
+    contex.drawImage(img, 0, 0, canvas.width, canvas.height);
+  };
+
+  Rslider.oninput = Gslider.oninput = Bslider.oninput = function() {
+    redraw(Rslider.value, Gslider.value, Bslider.value, true)
+  };
+
+  var diameter = canvas.width;
+  var circleOffset = 0;
+  var radius = diameter / 2;
+  var radiusSquared = radius * radius;
+  var radiusPlusOffset = radius + circleOffset;
+
+
+  canvas.addEventListener('mousemove', function(e) {
+    setRGBfromcanvas(e, event.clientX, event.clientY);
+  });
+  canvas.addEventListener('click',function(e) {setRGBfromcanvas(e, event.clientX, event.clientY);});
+  /*
+  var ignoreMouse = true;
+  canvas.addEventListener('mousedown',function(e) {ignoreMouse = false;});
+  canvas.addEventListener('mouseup',function(e) {ignoreMouse = true;});
+  */
+
+  canvas.addEventListener("touchmove", function(e) {
+    setRGBfromcanvas(e, event.touches[0].pageX, event.touches[0].pageY);
+  });
+  //canvas.addEventListener("touchstart", function (e) {}
+  //canvas.addEventListener("touchend", function (e) {}
+
+  function setRGBfromcanvas(event, posX, posY) {
+
+    if (mobile == false && event.which != 1) // Check the mouse is down(clicked) on desktop browser
+      return;
+
+    var rect = canvas.getBoundingClientRect();
+    var x = posX - rect.left;
+    var y = posY - rect.top;
+
+    currentX = (x - radius);
+    currentY = (y - radius);
+    var theta = Math.atan2(currentY, currentX),
+      d = currentX * currentX + currentY * currentY;
+
+    if (d < radiusSquared) {
+      var imgd = contex.getImageData(x, y, 1, 1);
+      var data = imgd.data;
+      redraw(data[0], data[1], data[2], false);
+    } else {
+      //console.log("Mouse outside circle");
+      //label.innerHTML = "Mouse outside circle";
+    }
+  };
+
+  // Prevent scrolling when touching the canvas on mobile 
+  document.body.addEventListener("touchstart", function(e) {
+    if (e.target == canvas) {
+      e.preventDefault();
+    }
+  }, false);
+  document.body.addEventListener("touchend", function(e) {
+    if (e.target == canvas) {
+      e.preventDefault();
+    }
+  }, false);
+  document.body.addEventListener("touchmove", function(e) {
+    if (e.target == canvas) {
+      e.preventDefault();
+    }
+  }, false);
+
+
+  function redraw(r, g, b, fromSlider) {
+    if (fromSlider != true && Rslider.value == r && Gslider.value == g &&  Bslider.value == b)
+      return;  // If nothing changed, return. (duplicate events come from mousemove & mouseclick)
+      
+    label.innerHTML = 'r:'+r+' g:'+g+' b:'+b;
+    var hexString = RGBtoHex(r, g, b);
+    label.style.backgroundColor = "#" + hexString;
+    if ((r + g + b) > 600)
+      label.style.color = "#000000";
+    else
+      label.style.color = "#ffffff";
+
+    Rslider.value = r;
+    Gslider.value = g;
+    Bslider.value = b;
+    sendColor('&r='+r+'&g='+g+'&b='+b);
+    document.getElementById('pattern').value = 0;
+    console.log("R:" + r + " G:" + g + " B:" + b);
+  }
+}
+
+function RGBtoHex(R,G,B) {return toHex(R)+toHex(G)+toHex(B)};
+
+function toHex(N) {
+      if (N==null) return "00";
+      N=parseInt(N); if (N==0 || isNaN(N)) return "00";
+      N=Math.max(0,N); N=Math.min(N,255); N=Math.round(N);
+      return "0123456789ABCDEF".charAt((N-N%16)/16)
+           + "0123456789ABCDEF".charAt(N%16);
+};
+
+function sendColor(rgb) {
+  if (rgb == null)
+    rgb = "r=0&g=0&b=0"
+  else
+    document.getElementById('pattern').value = 0;
+
+  var $http;
+  $self = arguments.callee;
+  if (window.XMLHttpRequest) {
+    $http = new XMLHttpRequest();
+  } else if (window.ActiveXObject) {
+    try {
+      $http = new ActiveXObject('Msxml2.XMLHTTP');
+    } catch (e) {
+      $http = new ActiveXObject('Microsoft.XMLHTTP');
+    }
+  }
+  if ($http) {
+    $http.onreadystatechange = function() {
+      if (/4|^complete$/.test($http.readyState)) {
+        var data = JSON.parse($http.responseText);
+        console.log("Receive " + data.led.r + data.led.g + data.led.b + data.led.p);
+        document.getElementById('pattern').value = data.led.p;
+      }
+    }
+  };
+  //$http.open('GET', location.protocol + '//' + location.host + '/led?' + rgb + '&p=' + document.getElementById('pattern').value, true);
+  //$http.send(null);
+};
+
+</script>
+		
+		<title>Color test</title>
+		<meta charset="utf-8" />
+	</head>
+	<STYLE TYPE="text/css"> 
+BODY {
+  color:white; 
+  background-color:black; 
+  font-family:sans-serif;
+} 
+</STYLE>
+</head>
+<body background="black.png" onload="colorPicker();">
+    <table><tr align="center"><td colspan="2">
+    <div>
+		  <canvas id="Cpicker" width="200" height="200"></canvas>
+      <!--<canvas id="Cpicker" style="background-image: url('colors.png');background-repeat: no-repeat;"></canvas>-->
+      </div>
+    </td></tr>
+    <tr align="center"><td align="right">Red</td><td align="left">
+      <input type="range" id="Rslider" min="0" max="255">
+    </td></tr>
+    <tr align="center"><td align="right">Green</td><td align="left">
+      <input type="range" id="Gslider" min="0" max="255"
+    </td></tr>
+    <tr align="center"><td align="right">Blue</td><td align="left">
+      <input type="range" id="Bslider" min="0" max="255">
+    </td></tr>
+    <tr  align="center"><td colspan="2">
+      <span style="" id="result">&nbsp;</span>
+    </td></tr>
+    <tr  align="center"><td colspan="2">
+      <div id="Cdropdown">
+        <select name="pattern" id="pattern" onchange="sendColor();reset()">
+          <option value="0">None</option>
+          <option value="1">Rainbow</option>
+          <option value="2">Christmas</option>
+          <option value="3">Fill & Empty</option>
+          <option value="4">Runners</option>
+		  <option value="5">R Runners</option>
+		  <option value="6">Random</option>
+        </select>
+      </div>
+    </td></tr></table>
+	</body>
+</html>

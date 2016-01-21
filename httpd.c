@@ -359,6 +359,7 @@ void serve_led_request(int client, char *query)
   int g = -1;
   int b = -1;
   int pattern = 0;
+  int option = 0;
   
   buf[0] = 'A'; buf[1] = '\0';
   while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
@@ -382,6 +383,9 @@ void serve_led_request(int client, char *query)
       case 'p':
 	      pattern = toRGB(split+1);
 	    break;
+      case 'o':
+	      option = toRGB(split+1);
+	    break;
 	  }
     token = strtok(NULL, "&");
   }
@@ -391,11 +395,20 @@ void serve_led_request(int client, char *query)
     cannot_execute(client);
     return;
   } else {
-    lpd8806worker(&_gpioconfig_.lpd8806cfg[0], (uint8_t*)&pattern, (uint8_t*)&r, (uint8_t*)&g, (uint8_t*)&b );
+    int index = 0;
+    lpd8806worker(&_gpioconfig_.lpd8806cfg[index], (uint8_t*)&pattern, (uint8_t*)&option, (uint8_t*)&r, (uint8_t*)&g, (uint8_t*)&b );
     
     sprintf(buf, "{ \"title\" : \"%s\",\r\n\"name\" : \"%s\",\r\n", _gpioconfig_.name, _gpioconfig_.name);
 	  send(client, buf, strlen(buf), 0);
     sprintf(buf, "\"led\" : {\"r\" : %d, \"g\" : %d, \"b\" : %d, \"p\" : %d}\r\n}\r\n", r,g,b,pattern);
+    /* This one is more accurate and should be used over the above next debug session */
+    /*
+    sprintf(buf, "\"led\" : {\"name\" : \"%s\", \"r\" : %d, \"g\" : %d, \"b\" : %d, \"p\" : %d}\r\n}\r\n",
+                             _gpioconfig_.lpd8806cfg[index].name,
+                             _gpioconfig_.lpd8806cfg[index].red,
+                             _gpioconfig_.lpd8806cfg[index].green,
+                             _gpioconfig_.lpd8806cfg[index].blue,
+                             _gpioconfig_.lpd8806cfg[index].pattern);*/
 	  send(client, buf, strlen(buf), 0);
   }
 }
@@ -453,14 +466,21 @@ void serve_gpio_request(int client, char *query)
     // if W1
     for (i=0; i < _gpioconfig_.onewiredevices; i++)
     {
-      //sprintf(buf, ",\r\n");
-      //send(client, buf, strlen(buf), 0);
-      //printf ("LENGTH=%d\n",strlen(buf));
       if (readw1(&_gpioconfig_.onewcfg[i], buf) )
       {
         send(client, ",\r\n", 3, 0);
         send(client, buf, strlen(buf), 0);
       }
+    }
+    // if lpdled
+    for (i=0; i < _gpioconfig_.lpd8806devices; i++)
+    {
+      sprintf(buf, "\"led\" : {\"name\" : \"%s\", \"r\" : %d, \"g\" : %d, \"b\" : %d, \"p\" : %d}\r\n}\r\n",
+                             _gpioconfig_.lpd8806cfg[i].name,
+                             _gpioconfig_.lpd8806cfg[i].red,
+                             _gpioconfig_.lpd8806cfg[i].green,
+                             _gpioconfig_.lpd8806cfg[i].blue,
+                             _gpioconfig_.lpd8806cfg[i].pattern);
     }
     
     sprintf(buf, "}\r\n");

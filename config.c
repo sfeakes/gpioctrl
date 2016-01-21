@@ -154,6 +154,7 @@ void readCfg (char *cfgFile)
             } else if (strncasecmp (b_ptr, "ONEWIREDEVICE", 13) == 0) {
               _gpioconfig_.onewcfg[_gpioconfig_.lpd8806devices].device = cleanallocindex(indx+1, 1);
               _gpioconfig_.onewcfg[_gpioconfig_.lpd8806devices].name = cleanallocindex(indx+1, 2);
+              _gpioconfig_.onewcfg[_gpioconfig_.onewiredevices].pollsec = cleanint(cleanallocindex(indx+1, 3));
               logMessage (LOG_DEBUG, "Config onewiredevice: '%s' = '%s'\n", 
                          _gpioconfig_.onewcfg[_gpioconfig_.lpd8806devices].device, 
                          _gpioconfig_.onewcfg[_gpioconfig_.lpd8806devices].name);

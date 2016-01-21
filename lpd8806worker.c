@@ -101,7 +101,11 @@ void lpd880led_cleanup()
       close(_gpioconfig_.lpd8806cfg[i].fd);
       
     pthread_mutex_destroy(&_gpioconfig_.lpd8806cfg[i].t_mutex);
-
+    
+    _gpioconfig_.lpd8806cfg[i].red = 0;
+    _gpioconfig_.lpd8806cfg[i].green = 0;
+    _gpioconfig_.lpd8806cfg[i].blue = 0;
+    _gpioconfig_.lpd8806cfg[i].pattern = 0;
   }
 }
 
@@ -144,7 +148,7 @@ boolean lpd880led_init(struct LPD8806cfg *lpddevice)
   return(TRUE);
 }
 
-boolean lpd8806worker(struct LPD8806cfg *lpddevice, uint8_t *pattern, uint8_t *r, uint8_t *g, uint8_t *b) 
+boolean lpd8806worker(struct LPD8806cfg *lpddevice, uint8_t *pattern, uint8_t *option, uint8_t *r, uint8_t *g, uint8_t *b) 
 {
 logMessage (LOG_DEBUG, "lpd8806worker %s %s pattern:%d r:%d g:%d b:%d\n",lpddevice->name,lpddevice->device,*pattern,*r,*g,*b);
 
@@ -162,6 +166,7 @@ logMessage (LOG_DEBUG, "lpd8806worker %s %s pattern:%d r:%d g:%d b:%d\n",lpddevi
     pthread_join(lpddevice->thread_id , NULL); // wait for thread to terminate
     lpddevice->thread_id = 0;
     logMessage (LOG_DEBUG, "Canceled LED Pattern thread.\n");
+    lpddevice->red = lpddevice->green = lpddevice->blue = lpddevice->pattern = 0;
   }
   
   if (*pattern > 0)
@@ -201,6 +206,11 @@ logMessage (LOG_DEBUG, "lpd8806worker %s %s pattern:%d r:%d g:%d b:%d\n",lpddevi
       
 //logMessage (LOG_DEBUG, "Mutex unlocked\n");
   }
+  
+  lpddevice->red = *r;
+  lpddevice->green = *g;
+  lpddevice->blue = *b;
+  lpddevice->pattern = *pattern;
   
   return TRUE;   
 }

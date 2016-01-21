@@ -30,18 +30,19 @@ struct GPIOcfg {
 
 struct ONEWcfg {
   float last_value; 
-  long last_event_time; 
+  long last_event_time;
+  int pollsec;
   char *name;
   char *device;
 };
 
 struct LPD8806cfg {
-/*
+
   uint8_t red;
   uint8_t green;
   uint8_t blue;
   uint8_t pattern;
-*/
+
   //int leds;
   char *device;
   char *name;

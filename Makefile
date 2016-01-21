@@ -9,7 +9,7 @@ CFLAGS = -Wall -g -lpthread -lwiringPi -lm -I.
 # redefine for windows build with raspbain keychain.
 # http://gnutoolchains.com/raspberry/
 ifeq ($(OS),Windows_NT)
-  CFLAGS = -Wall -g -lwiringPi -lpthread -I./wiringPI -L./wiringPi -lm
+  CFLAGS = -Wall -g -lwiringPi -lpthread -I./win-fakelib -L./win-fakelib -lm
   CC = arm-linux-gnueabihf-gcc
   RM = del
 endif

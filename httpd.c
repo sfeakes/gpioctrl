@@ -38,7 +38,7 @@ application/xml	.xml
 // Need to put this in headder
 //extern int readw1(char *device, char *buff);
 extern int readw1(struct ONEWcfg *w1device, char *rtnbuff);
-
+extern int readw1_for_mh(struct ONEWcfg *w1device, int *rtnbuff);
 
 #define ISspace(x) isspace((int)(x))
 
@@ -60,6 +60,7 @@ void not_found(int);
 void serve_file(int, const char *);
 void serve_gpio_request(int, char *);
 void serve_led_request(int, char *);
+void serve_meteohub_request(int client, char *query);
 void unimplemented(int);
 
 /**********************************************************************/
@@ -132,6 +133,10 @@ void accept_request(int client)
   else if ( strcmp(url, "/led") == 0 || strcmp(url, "/led/") == 0) 
   {
     serve_led_request(client, query_string);
+  }
+  else if ( strcmp(url, "/mh") == 0 || strcmp(url, "/mh/") == 0) 
+  {
+    serve_meteohub_request(client, query_string);
   }
   else
   {
@@ -347,6 +352,29 @@ uint8_t toRGB(char *snum)
   rtn<0?rtn=0:rtn;
   
   return rtn;
+}
+
+void serve_meteohub_request(int client, char *query)
+{
+  char buf[1024];
+  int value = 0;
+  int numchars = 1;
+  int i;
+  
+  buf[0] = 'A'; buf[1] = '\0';
+  while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
+  {
+    numchars = get_line(client, buf, sizeof(buf));
+  }
+  
+  for (i=0; i < _gpioconfig_.onewiredevices; i++)
+  {
+    if (readw1_for_mh(&_gpioconfig_.onewcfg[i], &value) )
+    {
+      sprintf(buf,"%d|%s|%s\r\n",value,_gpioconfig_.onewcfg[i].name,_gpioconfig_.onewcfg[i].device);
+      send(client, buf, strlen(buf), 0);
+    }
+  }
 }
 
 void serve_led_request(int client, char *query)

@@ -59,15 +59,18 @@ int readw1(struct ONEWcfg *w1device, char *rtnbuff)
 
   if (!readw1_raw(w1device, false))
     return FALSE;
-  
+  /*
   sprintf(rtnbuff, "\"%s\" : { \"name\" : \"%s\", \"pin\" : \"1w1\", \"value\" :  %.2f}\r\n",
                    w1device->device,w1device->name,(w1device->last_value / 1000) * 9 / 5 + 32 );
+                   */
+  sprintf(rtnbuff, "\"%s\" : { \"name\" : \"%s\", \"pin\" : \"1w1\", \"value\" :  %.2f}\r\n",
+                   w1device->device,w1device->name,(w1device->last_value / 1000) );
                    
   return TRUE;
   
 }
 
-
+/*
 int readw1_OLD(struct ONEWcfg *w1device, char *rtnbuff) {
   char devPath[128]; // Path to device
   char buf[256];     // Data from device
@@ -108,6 +111,7 @@ int readw1_OLD(struct ONEWcfg *w1device, char *rtnbuff) {
 
   return TRUE; 
 }
+*/
 /*
 int readw1_old(char *device, char *rtnbuff) {
  DIR * dir;

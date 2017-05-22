@@ -121,6 +121,7 @@ void readCfg (char *cfgFile)
   _gpioconfig_.onewiredevices = 0;
   _gpioconfig_.pinscfgs = 0;
   _gpioconfig_.lpd8806devices = 0;
+  _gpioconfig_.sht31devices = 0;
   
   if( (fp = fopen(cfgFile, "r")) != NULL){
     while(! feof(fp)){
@@ -151,25 +152,43 @@ void readCfg (char *cfgFile)
             } else if (strncasecmp (b_ptr, "WEBCACHE", 8) == 0) {
               _gpioconfig_.webcache = text2bool(indx+1);
               logMessage (LOG_DEBUG, "Config Web cache = %d\n", _gpioconfig_.webcache);
+            } else if (strncasecmp (b_ptr, "DEBUG2LOGFILE", 8) == 0) {
+              _debuglog_ = text2bool(indx+1);
+              _debug2file_ = text2bool(indx+1);
+              logMessage (LOG_DEBUG, "Config debug to file = %d\n", _gpioconfig_.webcache);
             } else if (strncasecmp (b_ptr, "ONEWIREDEVICE", 13) == 0) {
-              _gpioconfig_.onewcfg[_gpioconfig_.lpd8806devices].device = cleanallocindex(indx+1, 1);
-              _gpioconfig_.onewcfg[_gpioconfig_.lpd8806devices].name = cleanallocindex(indx+1, 2);
+              _gpioconfig_.onewcfg[_gpioconfig_.onewiredevices].device = cleanallocindex(indx+1, 1);
+              _gpioconfig_.onewcfg[_gpioconfig_.onewiredevices].name = cleanallocindex(indx+1, 2);
               _gpioconfig_.onewcfg[_gpioconfig_.onewiredevices].pollsec = cleanint(cleanallocindex(indx+1, 3));
-              logMessage (LOG_DEBUG, "Config onewiredevice: '%s' = '%s'\n", 
-                         _gpioconfig_.onewcfg[_gpioconfig_.lpd8806devices].device, 
-                         _gpioconfig_.onewcfg[_gpioconfig_.lpd8806devices].name);
-              _gpioconfig_.lpd8806devices++;
-            } else if (strncasecmp (b_ptr, "LPD8806DEVICE", 13) == 0) {
-              _gpioconfig_.lpd8806cfg[_gpioconfig_.onewiredevices].device = cleanallocindex(indx+1, 1);
-              _gpioconfig_.lpd8806cfg[_gpioconfig_.onewiredevices].name = cleanallocindex(indx+1, 2);
-              _gpioconfig_.lpd8806cfg[_gpioconfig_.onewiredevices].buf.leds = cleanint(cleanallocindex(indx+1, 3));
-              if (_gpioconfig_.lpd8806cfg[_gpioconfig_.onewiredevices].buf.leds <= 0)
-                {_gpioconfig_.lpd8806cfg[_gpioconfig_.onewiredevices].buf.leds=DEFAULT_LEDS;}
-              logMessage (LOG_DEBUG, "Config lpd8806cfg: device='%s' name='%s' leds=%d\n", 
-                          _gpioconfig_.lpd8806cfg[_gpioconfig_.onewiredevices].device, 
-                          _gpioconfig_.lpd8806cfg[_gpioconfig_.onewiredevices].name,
-                          _gpioconfig_.lpd8806cfg[_gpioconfig_.onewiredevices].buf.leds);
+              _gpioconfig_.onewcfg[_gpioconfig_.onewiredevices].mh_name = cleanallocindex(indx+1, 4);
+              logMessage (LOG_DEBUG, "Config onewiredevice: device:'%s' name:'%s' poll:'%d' mh_name:'%s'\n", 
+                         _gpioconfig_.onewcfg[_gpioconfig_.onewiredevices].device, 
+                         _gpioconfig_.onewcfg[_gpioconfig_.onewiredevices].name,
+                         _gpioconfig_.onewcfg[_gpioconfig_.onewiredevices].pollsec,
+                         _gpioconfig_.onewcfg[_gpioconfig_.onewiredevices].mh_name);
               _gpioconfig_.onewiredevices++;
+            } else if (strncasecmp (b_ptr, "LPD8806DEVICE", 13) == 0) {
+              _gpioconfig_.lpd8806cfg[_gpioconfig_.lpd8806devices].device = cleanallocindex(indx+1, 1);
+              _gpioconfig_.lpd8806cfg[_gpioconfig_.lpd8806devices].name = cleanallocindex(indx+1, 2);
+              _gpioconfig_.lpd8806cfg[_gpioconfig_.lpd8806devices].buf.leds = cleanint(cleanallocindex(indx+1, 3));
+              if (_gpioconfig_.lpd8806cfg[_gpioconfig_.lpd8806devices].buf.leds <= 0)
+                {_gpioconfig_.lpd8806cfg[_gpioconfig_.lpd8806devices].buf.leds=DEFAULT_LEDS;}
+              logMessage (LOG_DEBUG, "Config lpd8806cfg: device='%s' name='%s' leds=%d\n", 
+                          _gpioconfig_.lpd8806cfg[_gpioconfig_.lpd8806devices].device, 
+                          _gpioconfig_.lpd8806cfg[_gpioconfig_.lpd8806devices].name,
+                          _gpioconfig_.lpd8806cfg[_gpioconfig_.lpd8806devices].buf.leds);
+              _gpioconfig_.lpd8806devices++;
+            } else if (strncasecmp (b_ptr, "SHT31DEVICE", 11) == 0) {
+              _gpioconfig_.sht31cfg[_gpioconfig_.sht31devices].device = cleanallocindex(indx+1, 1);
+              _gpioconfig_.sht31cfg[_gpioconfig_.sht31devices].name = cleanallocindex(indx+1, 2);
+              _gpioconfig_.sht31cfg[_gpioconfig_.sht31devices].pollsec = cleanint(cleanallocindex(indx+1, 3));
+              _gpioconfig_.sht31cfg[_gpioconfig_.sht31devices].mh_name = cleanallocindex(indx+1, 4);
+              logMessage (LOG_DEBUG, "Config sht31device: device:'%s' name:'%s' poll:'%d' mh_name:'%s'\n", 
+                         _gpioconfig_.sht31cfg[_gpioconfig_.sht31devices].device, 
+                         _gpioconfig_.sht31cfg[_gpioconfig_.sht31devices].name,
+                         _gpioconfig_.sht31cfg[_gpioconfig_.sht31devices].pollsec,
+                         _gpioconfig_.sht31cfg[_gpioconfig_.sht31devices].mh_name);
+              _gpioconfig_.sht31devices++; 
             }
           } else {
             if (count_characters(b_ptr, delim[0]) < 6)
@@ -180,6 +199,7 @@ void readCfg (char *cfgFile)
             }
             tokenindex=0;
             token = strtok(b_ptr, delim);
+            _gpioconfig_.gpiocfg[line].ext_cmd = NULL;
             while( token != NULL ) {
               if ( token[(strlen(token)-1)] == '\n') { token[(strlen(token)-1)] = '\0'; }
               switch (tokenindex) {
@@ -209,12 +229,22 @@ void readCfg (char *cfgFile)
                 //strncpy ( _gpioconfig_.gpiocfg[line].name, token, 50 );
                 strcpy ( _gpioconfig_.gpiocfg[line].name, trimwhitespace(token) );
                 break;
+              case 8:
+                _gpioconfig_.gpiocfg[line].ext_cmd = (char*)malloc(strlen(token)+3);
+                strcpy ( _gpioconfig_.gpiocfg[line].ext_cmd, trimwhitespace(token) );
+                if (strlen(_gpioconfig_.gpiocfg[line].ext_cmd) == 0)
+                  _gpioconfig_.gpiocfg[line].ext_cmd = NULL;
+                else
+                  memcpy(&_gpioconfig_.gpiocfg[line].ext_cmd[strlen(_gpioconfig_.gpiocfg[line].ext_cmd)], " &\0", 3);
+                //_gpioconfig_.gpiocfg[line].ext_cmd = strcat(_gpioconfig_.gpiocfg[line].ext_cmd, " &");
+                //memcpy(&_gpioconfig_.gpiocfg[line].ext_cmd[strlen(_gpioconfig_.gpiocfg[line].ext_cmd)], "\0", 1);
+                break;
               }
               token = strtok(NULL, delim);
               tokenindex++;
             }
             if (_gpioconfig_.gpiocfg[line].pin >= 0) {
-              logMessage (LOG_DEBUG,"Config line %d : %s\n%25s : %d\n%25s : %d\n%25s : %d\n%25s : %d\n%25s : %d\n%25s : %d\n\%25s : %d\n",
+              logMessage (LOG_DEBUG,"Config line %d : %s\n%25s : %d\n%25s : %d\n%25s : %d\n%25s : %d\n%25s : %d\n%25s : %d\n%25s : %d\n%25s : %s\n",
               line, _gpioconfig_.gpiocfg[line].name,
               "PIN",_gpioconfig_.gpiocfg[line].pin,
               "inout/output", _gpioconfig_.gpiocfg[line].input_output, 
@@ -222,9 +252,10 @@ void readCfg (char *cfgFile)
               "Receive mode", _gpioconfig_.gpiocfg[line].receive_mode, 
               "Receive state", _gpioconfig_.gpiocfg[line].receive_state, 
               "Trigger output pin", _gpioconfig_.gpiocfg[line].output_pin,
-              "Trigger output state", _gpioconfig_.gpiocfg[line].output_state);
-              
-              _gpioconfig_.pinscfgs++;
+              "Trigger output state", _gpioconfig_.gpiocfg[line].output_state,
+              "External command", _gpioconfig_.gpiocfg[line].ext_cmd);
+           
+              _gpioconfig_.pinscfgs++;              
             }
             line++;
           }

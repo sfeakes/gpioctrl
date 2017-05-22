@@ -2,7 +2,7 @@
 CC = gcc
 
 # define any compile-time flags
-CFLAGS = -Wall -g -lpthread -lwiringPi -lm -I. 
+CFLAGS = -Wall -lpthread -lwiringPi -lm -I. 
 
 #CFLAGS = -Wall -g -I./wiringPI
 
@@ -16,7 +16,7 @@ endif
 
 
 # define the C source files
-SRCS = gpioctrld.c utils.c config.c httpd.c w1.c lpd8806led.c lpd8806worker.c
+SRCS = gpioctrld.c utils.c config.c httpd.c w1.c lpd8806led.c lpd8806worker.c sht31.c
 SRCS_U = gpioctrl.c utils.c config.c lpd8806led.c
 
 # define the C object files 

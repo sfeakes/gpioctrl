@@ -17,6 +17,7 @@ NAME=gpioctrld
 # Daemon name, where is the actual executable
 DAEMON=/usr/local/bin/gpioctrld
 OPTIONS="-c /etc/gpioctrl/gpioctrl.conf"
+#OPTIONS="-v -f -c /etc/gpioctrl/gpioctrl.conf"
 # pid file for the daemon
 PIDFILE=/run/gpioctrld.pid
 

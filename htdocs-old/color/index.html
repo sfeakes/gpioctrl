@@ -171,8 +171,8 @@ function sendColor(rgb) {
       }
     }
   };
-  //$http.open('GET', location.protocol + '//' + location.host + '/led?' + rgb + '&p=' + document.getElementById('pattern').value, true);
-  //$http.send(null);
+  $http.open('GET', location.protocol + '//' + location.host + '/led?' + rgb + '&p=' + document.getElementById('pattern').value, true);
+  $http.send(null);
 };
 
 </script>
@@ -188,7 +188,7 @@ BODY {
 } 
 </STYLE>
 </head>
-<body background="black.png" onload="colorPicker();">
+<body background="../black.png" onload="colorPicker();">
     <table><tr align="center"><td colspan="2">
     <div>
 		  <canvas id="Cpicker" width="200" height="200"></canvas>

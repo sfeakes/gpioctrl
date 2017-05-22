@@ -49,7 +49,7 @@ int readw1_for_mh(struct ONEWcfg *w1device, int *rtnbuff)
   if (!readw1_raw(w1device, true))
     return FALSE;
   
-  *rtnbuff = (int)(w1device->last_value / 100)+0.5f;
+  *rtnbuff = (int)((w1device->last_value / 100)+0.5f);
   
   return true;
 }

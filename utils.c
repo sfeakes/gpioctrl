@@ -20,12 +20,15 @@
 
 #define MAXCFGLINE 265
 
+#define DEBUGFILE     "/var/log/gpioctrld.log"
+
 /*  _var = local
     _var_ = global
 */
 
 boolean _daemon_ = false;
 boolean _debuglog_ = false;
+boolean _debug2file_ = false;
 
 /*
 * This function reports the error and
@@ -49,49 +52,70 @@ void displayLastSystemError (const char *on_what)
 //LOG_ERR
 //LOG_DEBUG
 //LOG_WARNING
+
+char *elevel2text(int level) 
+{
+  switch(level) {
+    case LOG_ERR:
+      return "Error:";
+      break;
+    case LOG_DEBUG:
+      return "Debug:";
+      break;
+    case LOG_WARNING:
+      return "Warning:";
+      break;
+    case LOG_INFO:
+    default:
+      return "Info:";
+      break;
+  }
+  
+  return "";
+}
+
 void logMessage(int level, char *format, ...)
 {
   if (_debuglog_ == FALSE && level == LOG_DEBUG)
     return;
   
-  char buffer[256];
+  char buffer[512];
   va_list args;
   va_start(args, format);
-  vsprintf (buffer, format, args);
+  strncpy(buffer, "         ", 8);
+  vsprintf (&buffer[8], format, args);
   va_end(args);
 
   if (_daemon_ == TRUE)
   {
-    syslog (level, "%s", buffer);
+    syslog (level, "%s", &buffer[8]);
     closelog ();
   } 
   
-  if (_daemon_ != TRUE || level == LOG_ERR)
+  if (_daemon_ != TRUE || level == LOG_ERR || _debug2file_ == TRUE)
   {
-    char *strLevel = NULL;
-    switch(level) {
-    case LOG_ERR:
-      strLevel = "Error";
-      break;
-    case LOG_DEBUG:
-      strLevel = "Debug";
-      break;
-    case LOG_WARNING:
-      strLevel = "Warning";
-      break;
-    case LOG_INFO:
-    default:
-      strLevel = "Info";
-      break;
-    }
-    if ( buffer[strlen(buffer)-1] == '\n') { 
-      buffer[strlen(buffer)-1] = '\0';
+    char *strLevel = elevel2text(level);
+
+    strncpy(buffer, strLevel, strlen(strLevel));
+    if ( buffer[strlen(buffer)-1] != '\n') { 
+      buffer[strlen(buffer)+1] = '\0';
+      buffer[strlen(buffer)] = '\n';
     }
     
-    if (level != LOG_ERR)
-      printf ("%s: %s\n", strLevel, buffer);
-    else
-      fprintf (stderr, "%s: %s\n", strLevel, buffer);
+    if (_debug2file_ == TRUE) {
+      int fp = open(DEBUGFILE, O_WRONLY | O_APPEND | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+      if (fp != -1) {
+        write(fp, buffer, strlen(buffer)+1 );
+        close(fp);
+      } else {
+        fprintf (stderr, "Can't open debug log\n %s", buffer);
+      }
+    } else if (level != LOG_ERR) {
+      printf ("%s", buffer);
+    }
+    
+    if (level == LOG_ERR)
+      fprintf (stderr, "%s", buffer);
   }
 
 }
@@ -180,6 +204,84 @@ int count_characters(const char *str, char character)
 
     return count;
 }
+
+char * replace(char const * const original, char const * const pattern, char const * const replacement) 
+{
+  size_t const replen = strlen(replacement);
+  size_t const patlen = strlen(pattern);
+  size_t const orilen = strlen(original);
+
+  size_t patcnt = 0;
+  const char * oriptr;
+  const char * patloc;
+
+  // find how many times the pattern occurs in the original string
+  for ( (oriptr = original); (patloc = strstr(oriptr, pattern)); (oriptr = patloc + patlen))
+  {
+    patcnt++;
+  }
+
+  {
+    // allocate memory for the new string
+    size_t const retlen = orilen + patcnt * (replen - patlen);
+    char * const returned = (char *) malloc( sizeof(char) * (retlen + 1) );
+
+    if (returned != NULL)
+    {
+      // copy the original string, 
+      // replacing all the instances of the pattern
+      char * retptr = returned;
+      for ( (oriptr = original); (patloc = strstr(oriptr, pattern)); (oriptr = patloc + patlen))
+      {
+        size_t const skplen = patloc - oriptr;
+        // copy the section until the occurence of the pattern
+        strncpy(retptr, oriptr, skplen);
+        retptr += skplen;
+        // copy the replacement 
+        strncpy(retptr, replacement, replen);
+        retptr += replen;
+      }
+      // copy the rest of the string.
+      strcpy(retptr, oriptr);
+    }
+    return returned;
+  }
+}
+
+void run_external(char *command, int state)
+{
+
+  char *cmd = replace(command, "%STATE%", (state==1?"1":"0"));
+  system(cmd);
+  logMessage (LOG_DEBUG, "Ran command '%s'\n", cmd);
+  free(cmd);
+    
+  return;
+}
+
+void run_external_OLD(char *command, int state)
+{
+  //int status;
+  // By calling fork(), a child process will be created as a exact duplicate of the calling process.
+    // Search for fork() (maybe "man fork" on Linux) for more information.
+  if(fork() == 0){ 
+    // Child process will return 0 from fork()
+    //printf("I'm the child process.\n");
+    char *cmd = replace(command, "%STATE%", (state==1?"1":"0"));
+    system(cmd);
+    logMessage (LOG_DEBUG, "Ran command '%s'\n", cmd);
+    free(cmd);
+    exit(0);
+  }else{
+    // Parent process will return a non-zero value from fork()
+    //printf("I'm the parent.\n");
+    
+  }
+
+  return;
+}
+
+
 /*
 void readCfg (char *cfgFile)
 {

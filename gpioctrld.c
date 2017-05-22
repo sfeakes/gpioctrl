@@ -11,6 +11,9 @@
 #include <netinet/in.h>
 #include <time.h>
 #include <pthread.h>
+#include <arpa/inet.h> //inet_addr
+//#include <sys/socket.h>
+//#include <netdb.h>
 // We want a success/failure return value from 'wiringPiSetup()'
 #define WIRINGPI_CODES      1
 #include <wiringPi.h>
@@ -60,6 +63,7 @@ static int server_sock = -1;
 #ifdef PTHREAD
 void *connection_handler(void *socket_desc)
 {
+    //logMessage (LOG_DEBUG, "connection_handler()");
     //Get the socket descriptor
     int sock = *(int*)socket_desc;
     accept_request(sock);
@@ -85,13 +89,15 @@ int main (int argc, char *argv[])
   {
     if (strcmp (argv[i], "-h") == 0)
     {
-      printf ("%s (options)\n -d do NOT run as daemon\n -v verbose\n -c [cfg file name]\n -h this", argv[0]);
+      printf ("%s (options)\n -d do NOT run as daemon\n -v verbose\n -c [cfg file name]\n -f debug 2 file\n -h this", argv[0]);
       exit (EXIT_SUCCESS);
     }
     else if (strcmp (argv[i], "-d") == 0)
       _daemon_ = false;
     else if (strcmp (argv[i], "-v") == 0)
       _debuglog_ = true;
+    else if (strcmp (argv[i], "-f") == 0)
+      _debug2file_ = true;
     else if (strcmp (argv[i], "-c") == 0)
       cfg = argv[++i];
     else if (strcmp (argv[i], "-p") == 0)
@@ -110,7 +116,8 @@ int main (int argc, char *argv[])
   if (port != -1)
     _gpioconfig_.port = port; 
   
-  logMessage (LOG_DEBUG, "Running %s with options :- daemon=%d, verbose=%d, httpdport=%d configfile=%s\n", argv[0], _daemon_, _debuglog_, _gpioconfig_.port, cfg);
+  logMessage (LOG_DEBUG, "Running %s with options :- daemon=%d, verbose=%d, httpdport=%d, debug2file=%d configfile=%s\n", 
+                         argv[0], _daemon_, _debuglog_, _gpioconfig_.port, _debug2file_, cfg);
 
   if (_daemon_ == false)
   {
@@ -192,7 +199,7 @@ void main_loop ()
   
   // NSF, need to work out why the cast of _gpioconfig_.port fails in startup function, but just copy var for the moment.
   http_port = _gpioconfig_.port;
-  if ( (server_sock = startup(&http_port)) == EXIT_FAILURE )
+  if ( (server_sock = startup(&http_port)) == HTTPD_FAILURE )
   {
     logMessage (LOG_ERR, "Error starting HTTPD\n");
     exit (EXIT_FAILURE);
@@ -213,8 +220,11 @@ void main_loop ()
   
   while( (client_sock = accept(server_sock, (struct sockaddr *)&client_name, (socklen_t*)&client_name_len)) )
   {
-    logMessage (LOG_DEBUG, "Connection accepted");
-    
+    if (client_sock == -1) // Timeout
+      continue;
+    //printf("- %d -\n",client_sock);
+    logMessage (LOG_DEBUG, "Client IP: %s\n", inet_ntoa(client_name.sin_addr));
+
     if( pthread_create( &thread_id , NULL ,  connection_handler , (void*) &client_sock) < 0)
     {
       logMessage (LOG_ERR, "could not create thread\n");
@@ -312,13 +322,21 @@ void event_trigger (struct GPIOcfg *gpioconfig)
   {
     gpioconfig->last_event_state = in_state_read;
     
-    if (gpioconfig->output_state == TOGGLE)
-      out_state_toset = digitalRead (gpioconfig->output_pin) ^ 1;
-    else
-      out_state_toset = gpioconfig->output_state;
+    if (gpioconfig->output_pin != NONE) {
+      if (gpioconfig->output_state == TOGGLE)
+        out_state_toset = digitalRead (gpioconfig->output_pin) ^ 1;
+      else
+        out_state_toset = gpioconfig->output_state;
     
-    digitalWrite(gpioconfig->output_pin, out_state_toset);
-    logMessage (LOG_DEBUG, "        sent state %d to PIN %d\n", out_state_toset, gpioconfig->output_pin);
+      digitalWrite(gpioconfig->output_pin, out_state_toset);
+      logMessage (LOG_DEBUG, "        sent state %d to PIN %d\n", out_state_toset, gpioconfig->output_pin);
+    }
+    
+    if (gpioconfig->ext_cmd != NULL) {
+      //logMessage (LOG_DEBUG, "command '%s'\n", gpioconfig->ext_cmd);
+      run_external(gpioconfig->ext_cmd, in_state_read);
+    } 
+    
     //sleep(1);
   } else {
     logMessage (LOG_DEBUG,"        ignoring, reseived state does not match cfg\n");

@@ -1,0 +1,124 @@
+
+<!doctype html>
+<html>
+	<head>
+<STYLE TYPE="text/css"> 
+BODY { 
+  color:white; 
+  background-color:black; 
+  font-family:sans-serif;
+}
+<!--
+
+#hsv_map {
+	width: 240px;
+	height: 200px;
+	position: absolute;
+	right: 235px;
+	top: 0px;
+}
+#hsv_map .cover {
+	opacity: 0;
+	background-color: #000;
+	position: absolute;
+	top: -1px;
+	right: 39px;
+	bottom: -1px;
+	left: -1px;
+	border-radius: 50%;
+	cursor: crosshair;
+}
+#hsv_map .bar-bg, #hsv_map .bar-white {
+	position: absolute;
+	right: 0;
+	top: 0;
+	width: 25px;
+	height: 200px;
+
+}
+#hsv_map .bar-bg {
+
+}
+#hsv_map .bar-white {
+	background-color: #fff;
+}
+.hsv-cursor {
+	position: absolute;
+	border: 1px solid #eee;
+	border-radius: 50%;
+	width: 9px;
+	height: 9px;
+	cursor: default;
+	margin: -5px;
+	cursor: crosshair;
+}
+.dark .hsv-cursor {
+	border-color: #333;
+}
+.no-cursor .hsv-cursor, #hsv_map.no-cursor .cover {
+	cursor: none;
+	/*url(_blank.gif), url(_blank.png), url(_blank.cur), auto;*/
+}
+#luminanceBar {
+	position: absolute;
+	right: 0;
+	top: 0;
+	/* background-color: red; */
+}
+.hsv-barcursors {
+	position: absolute;
+	right: 0;
+	width: 25px;
+	top: 0;
+	height: 200px;
+	overflow: hidden;
+}
+.hsv-barcursor-l, .hsv-barcursor-r {
+	position: absolute;
+	width: 0;
+	height: 0;
+	border: 4px solid transparent;
+	margin-top: -4px;
+}
+.hsv-barcursor-l {
+	left: 0;
+	border-left: 4px solid #eee;
+}
+.hsv-barcursor-r {
+	right: 0;
+	border-right: 4px solid #eee;
+}
+.dark .hsv-barcursor-l {
+	border-left-color: #333;
+}
+.dark .hsv-barcursor-r {
+	border-right-color: #333;
+}
+-->
+</STYLE>
+	</head>
+	<body background="../black.png"">
+		<canvas id="c"></canvas>
+		<script>
+			var b = document.body;
+			var c = document.getElementsByTagName('canvas')[0];
+			var a = c.getContext('2d');
+			document.body.clientWidth; // fix bug in webkit: http://qfox.nl/weblog/218
+		</script>
+		<script src='1k.js'></script>
+		<!--
+		<div id="hsv_map" class="">
+            <canvas id="surface" width="200" height="200"></canvas>
+            <div class="cover" style="opacity: 0.24;"></div>
+            <div class="hsv-cursor" style="left: 48.225px; top: 108.55px; border-color: rgb(51, 51, 51);"></div>
+            <div class="bar-bg" style="background-color: rgb(0, 215, 255);"></div>
+            <div class="bar-white" style="opacity: 0.447619;"></div>
+            <canvas id="luminanceBar" width="25" height="200"></canvas>
+            <div class="hsv-barcursors dark" id="hsv_cursors">
+                <div class="hsv-barcursor-l" style="top: 48px;"></div>
+                <div class="hsv-barcursor-r" style="top: 48px;"></div>
+            </div>
+        </div>
+		-->
+	</body>
+</html>

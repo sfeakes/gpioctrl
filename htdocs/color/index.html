@@ -1,230 +1,76 @@
-<!doctype html>
-<html>
-	<head>
-    <script type="text/javascript">
-			//document.body.clientWidth; // fix bug in webkit: http://qfox.nl/weblog/218
-function colorPicker() {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset=utf-8 />
+   <title>Feakes Inc, LED Control</title>
+   <meta name="apple-mobile-web-app-capable" content="yes" />
+   <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+   <!--<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />-->
+   <!--<meta name="viewport" content="width=device-width, user-scalable=yes, width=800"/>-->
+   <meta name="viewport" content="width=device-width, user-scalable=yes"/>
+   <link href="/color/LED_icon.png" rel="apple-touch-icon">
+   <link href="/color/LED_icon.png" rel="icon">
+   <link rel="stylesheet" href="color.css" type="text/css">
+   <script src="color.js"></script>
+   <title>LED Color selector</title>
 
-    // Declare constants and variables to help with minification
-    // Some of these are inlined (with comments to the side with the actual equation)
-    var body = document.body;
-		//var canvas = document.getElementsByTagName('canvas')[0];
-    var canvas = document.getElementById('Cpicker');
-    var input = document.getElementById('Cslider');
-    var label = document.getElementById('Clabel');
-		var context = canvas.getContext('2d');
-    var doc = document;
-    
-    doc.canvas = doc.createElement;
-    body.context  = body.appendChild;
-    input.oninput = redraw;
-    
-    var width = canvas.width = canvas.height = 175,
-        imageData = context.createImageData(width, width),
-        pixels = imageData.data,
-        oneHundred = input.value = input.max = 100,
-        circleOffset = 15,
-        diameter = width-circleOffset*2,
-        radius = diameter / 2,
-        radiusPlusOffset = radius + circleOffset
-        radiusSquared = radius * radius,
-        two55 = 255,
-        currentY = oneHundred,
-        currentX = -currentY,
-        wheelPixel = circleOffset*4*width+circleOffset*4;
- 
-    // Math helpers
-    var math = Math,
-        PI = math.PI,
-        PI2 = PI * 2,
-        sqrt = math.sqrt,
-        atan2 = math.atan2;
-    
-    // Load color wheel data into memory.
-    for (y = input.min = 0; y < width; y++) {
-        for (x = 0; x < width; x++) {
-            var rx = x - radius,
-                ry = y - radius,
-                d = rx * rx + ry * ry,
-                rgb = hsvToRgb(
-                    (atan2(ry, rx) + PI) / PI2,     // Hue
-                    sqrt(d) / radius,               // Saturation
-                    1                               // Value
-                );
-            //console.log("wheelPixel "+wheelPixel);
-            // Print current color, but hide if outside the area of the circle
-            pixels[wheelPixel++] = rgb[0];
-            pixels[wheelPixel++] = rgb[1];
-            pixels[wheelPixel++] = rgb[2];
-            pixels[wheelPixel++] = d > radiusSquared ? 0 : two55;
-        }
-    }
-
-    
-    
-    canvas.onmousedown = doc.onmouseup = function(e) {
-        // Unbind mousemove if this is a mouseup event, or bind mousemove if this a mousedown event
-        doc.onmousemove = /p/.test(e.type) ? 0 : (redraw(e), redraw);
-        // doc.touchmove
-    }
- 
-    // Handle manual calls + mousemove event handler + input change event handler all in one place.
-    function redraw(e) {
-	    
-        // Only process an actual change if it is triggered by the mousemove or mousedown event.
-        // Otherwise e.pageX will be undefined, which will cause the result to be NaN, so it will fallback to the current value
-        if (e == 0) {
-          currentX = 0;
-          currentY = 0;
-        } else {
-          currentX = e.pageX - canvas.offsetLeft - radiusPlusOffset || currentX;
-          currentY = e.pageY - canvas.offsetTop - radiusPlusOffset  || currentY;
-        }
-        //console.log(currentX, currentY);
-        // Scope these locally so the compiler will minify the names.  Will manually remove the 'var' keyword in the minified version.
-        var theta = atan2(currentY, currentX),
-            d = currentX * currentX + currentY * currentY;
-        
-        // If the x/y is not in the circle, find angle between center and mouse point:
-        //   Draw a line at that angle from center with the distance of radius
-        //   Use that point on the circumference as the draggable location
-        if (d > radiusSquared) {
-            currentX = radius * math.cos(theta);
-            currentY = radius * math.sin(theta);
-            theta = atan2(currentY, currentX);
-            d = currentX * currentX + currentY * currentY;
-        }
-        
-        rgb = hsvToRgb(
-            (theta + PI) / PI2,         // Current hue (how many degrees along the circle)
-            sqrt(d) / radius,           // Current saturation (how close to the middle)
-            input.value / oneHundred );   // Current value (input type="range" slider value)
-         
-         
-        label.innerHTML = rgb[3];
-		
-		if (e != 0) {
-          sendRGBdata(rgb);
-		}
-        
-        // Reset to color wheel and draw a spot on the current location. 
-        context.putImageData(imageData, 0, 0);
-        
-        // Draw the current spot.
-        
-        // Circle:
-        context.beginPath();  
-        context.strokeStyle = '#000';
-        context.arc(~~currentX+radiusPlusOffset,~~currentY+radiusPlusOffset, 4, 0, PI2);
-        context.stroke();
-        
-        // Heart:
-        /*
-        context.font = "1em arial";
-        context.fillText("?", currentX+radiusPlusOffset-4,currentY+radiusPlusOffset+4);
-        */
-    }
-    
-    function sendRGBdata(rgb)
-    {
-	  sendColor("r="+rgb[0]+"&g="+rgb[1]+"&b="+rgb[2]);
-	  /*
-      console.log("Send "+ rgb[0],rgb[1],rgb[2]); 
-      var $http;
-      $self = arguments.callee;
-      if (window.XMLHttpRequest) {
-        $http = new XMLHttpRequest();
-      } else if (window.ActiveXObject) {
-        try {
-          $http = new ActiveXObject('Msxml2.XMLHTTP');
-        } catch (e) {
-          $http = new ActiveXObject('Microsoft.XMLHTTP');
-        }
-      }
-      if ($http) {
-        $http.onreadystatechange = function() {
-          if (/4|^complete$/.test($http.readyState)) {
-            var data = JSON.parse($http.responseText);
-              console.log("Receive " + data.led.r, data.led.g, data.led.b);
-              document.getElementById('pattern').value = data.led.p;
-          }
-        }
-      };
-      $http.open('GET', location.protocol + '//' + location.host + '/led?r='+rgb[0]+"&g="+rgb[1]+"&b="+rgb[2], true);
-      $http.send(null);
-	  */
-    }
-    
-    // Created a shorter version of the HSV to RGB conversion function in TinyColor
-    // https://github.com/bgrins/TinyColor/blob/master/tinycolor.js
-    function hsvToRgb(h, s, v) {
-        h*=6;
-        var i = ~~h,
-            f = h - i,
-            p = v * (1 - s),
-            q = v * (1 - f * s),
-            t = v * (1 - (1 - f) * s),
-            mod = i % 6,
-            r = ~~([v, q, p, p, t, v][mod] * two55),
-            g = ~~([t, v, v, q, p, p][mod] * two55),
-            b = ~~([p, p, t, v, v, q][mod] * two55);
-        
-        return [r, g, b, "rgb("+ r + "," + g + "," + b + ")"];
-    }
-    
-    // Kick everything off
-    redraw(0);
-};
-
-function sendColor(rgb)
-    {
-	  if (rgb == null)
-	    rgb="r=0&g=0&b=0"
-	  else
-	    document.getElementById('pattern').value = 0;
-
-      var $http;
-      $self = arguments.callee;
-      if (window.XMLHttpRequest) {
-        $http = new XMLHttpRequest();
-      } else if (window.ActiveXObject) {
-        try {
-          $http = new ActiveXObject('Msxml2.XMLHTTP');
-        } catch (e) {
-          $http = new ActiveXObject('Microsoft.XMLHTTP');
-        }
-      }
-      if ($http) {
-        $http.onreadystatechange = function() {
-          if (/4|^complete$/.test($http.readyState)) {
-            var data = JSON.parse($http.responseText);
-              console.log("Receive " + data.led.r + data.led.g + data.led.b + data.led.p);
-              document.getElementById('pattern').value = data.led.p;
-          }
-        }
-      };
-      //$http.open('GET', location.protocol + '//' + location.host + '/led?r=0&g=0&b=0&p='+document.getElementById('pattern').value, true);
-      $http.open('GET', location.protocol + '//' + location.host + '/led?'+rgb+'&p='+document.getElementById('pattern').value, true);
-      $http.send(null);
-    }
-		</script>
-		<!--<script src='colorwheel.js'></script>-->
-		<title>Color test</title>
-		<meta charset="utf-8" />
-	</head>
-	<STYLE TYPE="text/css"> 
-BODY {
-  color:white; 
-  background-color:black; 
-  font-family:sans-serif;
-} 
-</STYLE>
 </head>
-<body  onload="colorPicker();">
-    <table><tr align="center"><td>
-		  <canvas id="Cpicker"></canvas>
-      <!--<canvas id="Cpicker" style="background-image: url('circle2.png');background-repeat: no-repeat;"></canvas>-->
-    </td></tr>
-    </table>
+  <body>
+  <div id="main_div">
+  <div id="body_div">
+   <div id="status_div" class="status">
+     <div id="onoff_div">
+       <input id="onoff" type="image" width="70" style="outline:none" src="../on.png"/>
+     </div>
+     <div id="message_div">
+      <span style="" id="result">&nbsp;</span>
+    </div>
+   </div>
+   <div id="colorselector_div">
+    <div id="colorwheel_div">
+		  <canvas id="Cpicker" width="250" height="250"></canvas>
+    </div>
+    <!--
+    <div id="message_div" class="slider">
+      <div class="center_me"><span style="" id="result">&nbsp;</span></div>
+    </div>
+    -->
+   </div>
+   <div id="colorentry_div">
+    <div id="rslider_div" class="slider">
+      <div id="slabel">Red</div> 
+      <div id="sbar"><input type="range" id="Rslider" min="0" max="255"></div>
+    </div>
+    <div id="gslider_div" class="slider">
+      <div id="slabel">Green</div> 
+      <div id="sbar"><input type="range" id="Gslider" min="0" max="255"></div>
+    </div>
+    <div id="bslider_div" class="slider">
+      <div id="slabel">Blue</div> 
+      <div id="sbar"><input type="range" id="Bslider" min="0" max="255"></div>
+    </div>
+    <div id="Cdropdown_div" class="slider">
+      <div class="center_me">
+        <select name="pattern" id="pattern">
+          <option value="0">None</option>
+          <option value="1">Rainbow</option>
+          <option value="2">Christmas</option>   
+          <option value="3">Fill & Empty</option>
+          <option value="4">Runners</option>
+		      <option value="5">R Runners</option>
+		      <option value="6">Random</option>
+          <option value="7">Xmas Runners</option>
+          <option value="8">Xmas Fill & Empty</option>
+          <option value="9">Shades</option>
+        </select>
+      </div>
+    </div>
+    <div id="sslider_div" class="slider">
+      <div id="slabel">Speed</div> 
+      <div id="sbar"><input type="range" id="Sslider" min="0" max="100"></div>
+    </div>
+  </div>
+  </div>
+  </div>
 	</body>
 </html>

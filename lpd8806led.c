@@ -133,7 +133,8 @@ void print_ascii_buf(lpd8806_buffer *buf)
         printf("x");
     }
   }
-  printf("\n");
+  printf("\r"); // Change to "\n" for new line.
+  //printf("\n"); // Change to "\n" for new line.
 }
 
 
@@ -205,6 +206,10 @@ void set_gamma(double gamma_red, double gamma_green, double gamma_blue) {
     gamma_table_green[i] = (0x80 | (int)(pow(((float)i / 255.0), gamma_green) * 127.0 + 0.5));//(uint8_t)(pow(i/255.0,gamma_green)*255.0+0.5);
     gamma_table_blue[i] = (0x80 | (int)(pow(((float)i / 255.0), gamma_blue) * 127.0 + 0.5));//(uint8_t)(pow(i/255.0,gamma_blue)*255.0+0.5);
   }
+}
+
+void write_LED_color(lpd8806_color *p, lpd8806_color *LED) {
+  write_gamma_color(p, LED->red, LED->green, LED->blue);
 }
 
 void write_gamma_color(lpd8806_color *p, uint8_t red, uint8_t green, uint8_t blue) {

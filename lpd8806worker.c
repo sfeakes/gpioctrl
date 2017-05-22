@@ -25,6 +25,11 @@ void *pattern_fillandempty(void *threadlpddevice);
 void *pattern_runners(void *threadlpddevice);
 void *pattern_random(void *threadlpddevice);
 void *pattern_randomrunners(void *threadlpddevice);
+void *pattern_christmas_runners(void *threadlpddevice);
+void *pattern_christmas_fillandempty(void *threadlpddevice);
+void *pattern_shades(void *threadlpddevice);
+__useconds_t caculate_delay(uint8_t *percent, int *min, int *max);
+void *clearLED(struct LPD8806cfg *lpddevice);
 
 typedef void *(*PatternFunction)(void *prms);
 PatternFunction patternFunctions[] = {&pattern_rainbow, 
@@ -32,7 +37,10 @@ PatternFunction patternFunctions[] = {&pattern_rainbow,
                                       &pattern_fillandempty,
                                       &pattern_runners,
                                       &pattern_randomrunners,
-                                      &pattern_random
+                                      &pattern_random,
+                                      &pattern_christmas_runners,
+                                      &pattern_christmas_fillandempty,
+                                      &pattern_shades
                                       };
 
 void HSVtoRGB(double h, double s, double v, double *r, double *g, double *b);
@@ -62,6 +70,14 @@ lpd8806_color primaryLEDs[7]={
 /* magentaLED  */ {d1,d1,d0},
 /* whiteLED    */ {d1,d1,d1}
 };
+
+#define RED       0
+#define GREEN     1
+#define BLUE      2
+#define CYAN      3
+#define YELLOW    4
+#define MAGENTA   5
+#define WHITE     6
 
 void print_colors()
 {
@@ -95,6 +111,7 @@ void lpd880led_cleanup()
     if (_gpioconfig_.lpd8806cfg[i].buf.buffer != NULL) {
       logMessage (LOG_DEBUG, "free LED buffer\n");
       lpd8806_free(&_gpioconfig_.lpd8806cfg[i].buf);
+      //_gpioconfig_.lpd8806cfg[i].buf = NULL;
     }
     
     if (_gpioconfig_.lpd8806cfg[i].fd != 0)
@@ -158,8 +175,17 @@ logMessage (LOG_DEBUG, "lpd8806worker %s %s pattern:%d r:%d g:%d b:%d\n",lpddevi
       return FALSE;
     }
   }
+ 
+//logMessage (LOG_DEBUG, "Current LED Pattern thread id=%d pattern=%d, request pattern.\n",lpddevice->thread_id,lpddevice->pattern,pattern);
+ 
+  // See if a pattern ir running AND it's what's requested to run, if so, just change the option
+  if ( lpddevice->pattern == *pattern && lpddevice->thread_id != 0) {
+      logMessage (LOG_DEBUG, "Just setting option to %d\n",*option);
+      lpddevice->option = *option;
+      return TRUE;
+  } 
   
-  // Stop and pattern thread that's running
+  // Stop any pattern thread that's running
   if (lpddevice->thread_id != 0)
   {
     pthread_cancel(lpddevice->thread_id); // request thread terminate
@@ -170,7 +196,7 @@ logMessage (LOG_DEBUG, "lpd8806worker %s %s pattern:%d r:%d g:%d b:%d\n",lpddevi
   }
   
   if (*pattern > 0)
-  {
+  {   
     pthread_attr_t attr;
     /* Initialize and set thread detached attribute */
     pthread_attr_init(&attr);
@@ -179,7 +205,7 @@ logMessage (LOG_DEBUG, "lpd8806worker %s %s pattern:%d r:%d g:%d b:%d\n",lpddevi
     
     if (*pattern < 1 || *pattern > (sizeof (patternFunctions) / sizeof (PatternFunction)) )
       *pattern=1;
-      
+    
     if( pthread_create( &lpddevice->thread_id , NULL ,  patternFunctions[*pattern-1] , (void*) lpddevice) < 0)
     {
       logMessage (LOG_ERR, "could not create thread\n");
@@ -187,6 +213,7 @@ logMessage (LOG_DEBUG, "lpd8806worker %s %s pattern:%d r:%d g:%d b:%d\n",lpddevi
     }
     
     *r = *g = *b = 0;
+    
   } else {
     int i;  
     logMessage (LOG_DEBUG, "sending LED's color r:%d,g:%d,b:%d\n",*r,*g,*b);
@@ -211,8 +238,38 @@ logMessage (LOG_DEBUG, "lpd8806worker %s %s pattern:%d r:%d g:%d b:%d\n",lpddevi
   lpddevice->green = *g;
   lpddevice->blue = *b;
   lpddevice->pattern = *pattern;
+  lpddevice->option = *option;
   
   return TRUE;   
+}
+
+__useconds_t caculate_delay(uint8_t *percent, int *min, int *max)
+{
+  __useconds_t rtn;
+  
+  rtn = (((*max - *min) / 100) * (int)*percent) + *min;
+  
+  //logMessage (LOG_DEBUG, "Sleep %d.\n",rtn);
+  
+  return rtn;
+}
+
+void *clearLED(struct LPD8806cfg *lpddevice) {
+  int i;
+  
+  /* Blank the pixels */
+  if ( pthread_mutex_lock(&lpddevice->t_mutex) != 0 )
+    logMessage (LOG_WARNING, "Could not lock LED thread mutex %d\n",lpddevice->t_mutex);
+
+  for(i=0;i < lpddevice->buf.leds;i++) {
+    write_gamma_color(&lpddevice->buf.pixels[i],0x00,0x00,0x00);
+  }
+  send_buffer((int)lpddevice->fd,&lpddevice->buf);
+
+  if ( pthread_mutex_unlock(&lpddevice->t_mutex) != 0 )
+    logMessage (LOG_WARNING, "Could not unlock LED thread mutex\n");
+  
+  return 0;
 }
 
 void *pattern_random(void *threadlpddevice) 
@@ -223,18 +280,7 @@ void *pattern_random(void *threadlpddevice)
   
   logMessage (LOG_DEBUG, "LED Pattern Random starting.\n");
   
-  /* Blank the pixels */
-  if ( pthread_mutex_lock(&lpddevice->t_mutex) != 0 )
-  logMessage (LOG_WARNING, "Could not lock LED thread mutex %d\n",lpddevice->t_mutex);
-  
-  for(i=0;i < lpddevice->buf.leds;i++) {
-    write_gamma_color(&lpddevice->buf.pixels[i],0x00,0x00,0x00);
-  }
-  send_buffer((int)lpddevice->fd,&lpddevice->buf);
-  
-  if ( pthread_mutex_unlock(&lpddevice->t_mutex) != 0 )
-  logMessage (LOG_WARNING, "Could not unlock LED thread mutex\n");
-
+  clearLED(lpddevice);
 
   while(1) {
     //ledcolor = whiteLED;
@@ -255,7 +301,12 @@ void *pattern_random(void *threadlpddevice)
   
   return 0;
 }
-
+/*
+void *random_red_green()
+{
+  
+}
+*/
 void *pattern_randomrunners(void *threadlpddevice) 
 {
   int i, j;
@@ -265,21 +316,12 @@ void *pattern_randomrunners(void *threadlpddevice)
   
   logMessage (LOG_DEBUG, "LED Pattern random runners starting.\n");
   
-  /* Blank the pixels */
-  if ( pthread_mutex_lock(&lpddevice->t_mutex) != 0 )
-  logMessage (LOG_WARNING, "Could not lock LED thread mutex %d\n",lpddevice->t_mutex);
-  
-  for(i=0;i < lpddevice->buf.leds;i++) {
-    write_gamma_color(&lpddevice->buf.pixels[i],0x00,0x00,0x00);
-  }
-  send_buffer((int)lpddevice->fd,&lpddevice->buf);
-  
-  if ( pthread_mutex_unlock(&lpddevice->t_mutex) != 0 )
-  logMessage (LOG_WARNING, "Could not unlock LED thread mutex\n");
-
+  clearLED(lpddevice);
 
   while(1) {
     //ledcolor = whiteLED;
+    int smax = 50000;
+    int smin = 1000;
     ledcolor = primaryLEDs[rand() % 7];
     int shade;
     
@@ -298,7 +340,8 @@ void *pattern_randomrunners(void *threadlpddevice)
           write_gamma_color(&lpddevice->buf.pixels[j+ledtail+1],0x00,0x00,0x00);
       } 
       send_buffer((int)lpddevice->fd,&lpddevice->buf);
-      usleep(10000);
+      //usleep(10000);
+      usleep(caculate_delay(&lpddevice->option, &smin, &smax));
      }
     } else {
      for(i=0; i < lpddevice->buf.leds+ledtail+1; i++)
@@ -315,7 +358,8 @@ void *pattern_randomrunners(void *threadlpddevice)
           write_gamma_color(&lpddevice->buf.pixels[j-ledtail-1],0x00,0x00,0x00);
       }
       send_buffer((int)lpddevice->fd,&lpddevice->buf);
-      usleep(10000);
+      //usleep(10000);
+      usleep(caculate_delay(&lpddevice->option, &smin, &smax));
      }
     }
     
@@ -327,26 +371,18 @@ void *pattern_randomrunners(void *threadlpddevice)
 
 void *pattern_runners(void *threadlpddevice) 
 {
+  logMessage (LOG_DEBUG, "LED Pattern runners init.\n");
   int i, j;
+  int smax = 50000;
+  int smin = 1000;
   int ledtail = 4;
   struct LPD8806cfg *lpddevice = (struct LPD8806cfg *) threadlpddevice;
   lpd8806_color ledcolor;
   
   logMessage (LOG_DEBUG, "LED Pattern runners starting.\n");
   
-  /* Blank the pixels */
-  if ( pthread_mutex_lock(&lpddevice->t_mutex) != 0 )
-  logMessage (LOG_WARNING, "Could not lock LED thread mutex %d\n",lpddevice->t_mutex);
+  clearLED(lpddevice);
   
-  for(i=0;i < lpddevice->buf.leds;i++) {
-    write_gamma_color(&lpddevice->buf.pixels[i],0x00,0x00,0x00);
-  }
-  send_buffer((int)lpddevice->fd,&lpddevice->buf);
-  
-  if ( pthread_mutex_unlock(&lpddevice->t_mutex) != 0 )
-  logMessage (LOG_WARNING, "Could not unlock LED thread mutex\n");
-
-
   while(1) {
     //ledcolor = whiteLED;
     ledcolor = primaryLEDs[rand() % 7];
@@ -369,8 +405,11 @@ void *pattern_runners(void *threadlpddevice)
       }
       
       send_buffer((int)lpddevice->fd,&lpddevice->buf);
-      usleep(10000);
+      //usleep(10000);
+      usleep(caculate_delay(&lpddevice->option, &smin, &smax));
+      //sleep_percent(lpddevice->option, smin, smax);
     }
+    //usleep((rand() % 100) * 10000);
     usleep((rand() % 100) * 10000);
     //sleep(1);
   }
@@ -380,6 +419,8 @@ void *pattern_runners(void *threadlpddevice)
 
 void *pattern_fillandempty(void *threadlpddevice) 
 {
+  int smax = 10000;
+  int smin = 100;
   int i;
   int endat;
   int startat;
@@ -387,18 +428,7 @@ void *pattern_fillandempty(void *threadlpddevice)
   
   logMessage (LOG_DEBUG, "LED Pattern fill and empty starting.\n");
   
-  /* Blank the pixels */
-  if ( pthread_mutex_lock(&lpddevice->t_mutex) != 0 )
-      logMessage (LOG_WARNING, "Could not lock LED thread mutex %d\n",lpddevice->t_mutex);
-      
-  for(i=0;i < lpddevice->buf.leds;i++) {
-    write_gamma_color(&lpddevice->buf.pixels[i],0x00,0x00,0x00);
-  }
-  send_buffer((int)lpddevice->fd,&lpddevice->buf);
-  
-  if ( pthread_mutex_unlock(&lpddevice->t_mutex) != 0 )
-      logMessage (LOG_WARNING, "Could not unlock LED thread mutex\n");
-
+  clearLED(lpddevice);
 
   while(1) {
     // Outer loop to move each LED to the fill point
@@ -411,7 +441,8 @@ void *pattern_fillandempty(void *threadlpddevice)
            write_gamma_color(&lpddevice->buf.pixels[i-1],0x00,0x00,0x00);
 
         send_buffer((int)lpddevice->fd,&lpddevice->buf);
-        usleep(10000);
+        //usleep(10000);
+        usleep(caculate_delay(&lpddevice->option, &smin, &smax));
       }
     }
     sleep(3);
@@ -423,7 +454,8 @@ void *pattern_fillandempty(void *threadlpddevice)
           write_gamma_color(&lpddevice->buf.pixels[i+1],255,255,255);
 
         send_buffer((int)lpddevice->fd,&lpddevice->buf);
-        usleep(10000);
+        //usleep(10000);
+        usleep(caculate_delay(&lpddevice->option, &smin, &smax));
       }
     }
     sleep(3);
@@ -432,24 +464,175 @@ void *pattern_fillandempty(void *threadlpddevice)
   return 0;
 }
 
+void *pattern_christmas_fillandempty(void *threadlpddevice) 
+{
+  int smax = 3000;
+  int smin = 100;
+  int i;
+  int endat;
+  int startat;
+  struct LPD8806cfg *lpddevice = (struct LPD8806cfg *) threadlpddevice;
+  
+  logMessage (LOG_DEBUG, "LED Pattern christmas fill and empty starting.\n");
+  
+  clearLED(lpddevice);
+
+  while(1) {
+    // Outer loop to move each LED to the fill point
+    for(endat=lpddevice->buf.leds;endat > 0;endat--) {
+      // move an LED from 0 to the endat point
+      for(i=0; i < endat; i++)
+      {
+        if(endat % 2 == 0)
+          write_gamma_color(&lpddevice->buf.pixels[i],255,0x00,0x00);
+        else
+          write_gamma_color(&lpddevice->buf.pixels[i],0x00,255,0x00);
+        if (i > 0)
+          write_gamma_color(&lpddevice->buf.pixels[i-1],0x00,0x00,0x00);
+
+        send_buffer((int)lpddevice->fd,&lpddevice->buf);
+        //usleep(10000);
+        usleep(caculate_delay(&lpddevice->option, &smin, &smax));
+      }
+    }
+    sleep(3);
+    for(startat=(lpddevice->buf.leds-1);startat >= 0;startat--) {
+      for(i=startat; i < lpddevice->buf.leds; i++)
+      {
+        write_gamma_color(&lpddevice->buf.pixels[i],0x00,0x00,0x00);
+        if (i < (lpddevice->buf.leds-1)) {
+          //write_gamma_color(&lpddevice->buf.pixels[i+1],255,255,255);
+        if(startat % 2 == 0)
+          write_gamma_color(&lpddevice->buf.pixels[i+1],0x00,255,0x00);
+        else
+          write_gamma_color(&lpddevice->buf.pixels[i+1],255,0x00,0x00);
+        }
+
+        send_buffer((int)lpddevice->fd,&lpddevice->buf);
+        //usleep(10000);
+        usleep(caculate_delay(&lpddevice->option, &smin, &smax));
+      }
+    }
+    sleep(3);
+  }
+  
+  return 0;
+}
+
+
+
+
+void *pattern_christmas_runners(void *threadlpddevice) 
+{
+  int i, j;
+  int ledtail = 4;
+  struct LPD8806cfg *lpddevice = (struct LPD8806cfg *) threadlpddevice;
+  lpd8806_color ledrunner, fill1, fill2;
+  int smax = 20000;
+  int smin = 1000;
+    //ledcolor = primaryLEDs[rand() % 7];
+  int shade;
+  
+  logMessage (LOG_DEBUG, "LED Pattern random runners starting.\n");
+  
+  clearLED(lpddevice);
+
+  while(1) {
+
+    // Random red or green runner
+    if (rand() % 2 == 1) {
+      ledrunner = primaryLEDs[RED];
+    } else {
+      ledrunner = primaryLEDs[GREEN];
+    }
+    
+    // Random intensity
+    int intensity = (rand() % 10) * 10 + 155;
+
+    // Randem fill colors (rod & green)
+    if (rand() % 2 == 1) {
+      fill1.red = intensity;
+      fill1.green = 0;
+      fill1.blue = 0;
+    } else {
+      fill1.red = 0;
+      fill1.green = intensity;
+      fill1.blue = 0;
+    }
+    if (rand() % 2 == 1) {
+      fill2.red = intensity;
+      fill2.green = 0;
+      fill2.blue = 0;
+    }else {
+      fill2.red = 0;
+      fill2.green = intensity;
+      fill2.blue = 0;
+    }
+      
+    // Random direction
+    if (rand() % 2 == 1) {
+     for(i=lpddevice->buf.leds-1; i >= 0-ledtail-1; i--)
+     {
+      for (j=i; j < i+ledtail; j++)
+      {
+        shade=(j-i)*(d1/ledtail);
+        if (j >= 0 && j < lpddevice->buf.leds)
+          write_gamma_color(&lpddevice->buf.pixels[j],(ledrunner.red>d0)?ledrunner.red-shade:d0,
+                                                      (ledrunner.green>d0)?ledrunner.green-shade:d0,
+                                                      (ledrunner.blue>d0)?ledrunner.blue-shade:d0);   
+        if (j+ledtail < lpddevice->buf.leds+1) {
+          if((j+ledtail+1) % 2 == 0)
+            write_gamma_color(&lpddevice->buf.pixels[j+ledtail+1], fill1.red, fill1.green, fill1.blue);
+          else
+            write_gamma_color(&lpddevice->buf.pixels[j+ledtail+1], fill2.red, fill2.green, fill2.blue);
+        }
+      } 
+      send_buffer((int)lpddevice->fd,&lpddevice->buf);
+      //usleep(10000);
+      usleep(caculate_delay(&lpddevice->option, &smin, &smax));
+     }
+    } else {
+     for(i=0; i < lpddevice->buf.leds+ledtail+1; i++)
+     {
+      for (j=i; j > i-ledtail; j--)
+      {
+        shade=(i-j)*(d1/ledtail);
+
+        if (j >= 0 && j < lpddevice->buf.leds-1)
+          write_gamma_color(&lpddevice->buf.pixels[j],(ledrunner.red>d0)?ledrunner.red-shade:d0,
+                                                      (ledrunner.green>d0)?ledrunner.green-shade:d0,
+                                                      (ledrunner.blue>d0)?ledrunner.blue-shade:d0); 
+        if (j-ledtail > 0){
+          if((j-ledtail-1) % 2 == 0)
+            write_gamma_color(&lpddevice->buf.pixels[j-ledtail-1], fill1.red, fill1.green, fill1.blue);
+          else
+            write_gamma_color(&lpddevice->buf.pixels[j-ledtail-1], fill2.red, fill2.green, fill2.blue);
+        }
+      }
+      send_buffer((int)lpddevice->fd,&lpddevice->buf);
+      //usleep(10000);
+      usleep(caculate_delay(&lpddevice->option, &smin, &smax));
+     }
+    }
+    
+    //usleep((rand() % 100) * 10000);
+    usleep(caculate_delay(&lpddevice->option, &smin, &smax) * 100);
+  }
+  
+  return 0;
+}
+
+
 void *pattern_christmas(void *threadlpddevice) 
 {
+  int smax = 1000000;
+  int smin = 100000;
   int i;
   struct LPD8806cfg *lpddevice = (struct LPD8806cfg *) threadlpddevice;
   
   logMessage (LOG_DEBUG, "LED Pattern christmas starting.\n");
   
-  /* Blank the pixels */
-  if ( pthread_mutex_lock(&lpddevice->t_mutex) != 0 )
-      logMessage (LOG_WARNING, "Could not lock LED thread mutex %d\n",lpddevice->t_mutex);
-      
-  for(i=0;i < lpddevice->buf.leds;i++) {
-    write_gamma_color(&lpddevice->buf.pixels[i],0x00,0x00,0x00);
-  }
-  send_buffer((int)lpddevice->fd,&lpddevice->buf);
-  
-  if ( pthread_mutex_unlock(&lpddevice->t_mutex) != 0 )
-      logMessage (LOG_WARNING, "Could not unlock LED thread mutex\n");
+  clearLED(lpddevice);
 
   int sr = 1; 
   while(1) {
@@ -470,14 +653,68 @@ void *pattern_christmas(void *threadlpddevice)
     
     sr = !sr;
     //usleep(10000);
-    sleep(1);
+    //sleep(1);
+    usleep(caculate_delay(&lpddevice->option, &smin, &smax));
   }
   
   return 0;
 }
 
+
+void *pattern_shades(void *threadlpddevice) 
+{
+  int smax = 1000000;
+  int smin = 5000;
+  //lpd8806_color *p;
+  //lpd8806_buffer *buf;
+  int i;
+  double h, r, g, b;
+  struct LPD8806cfg *lpddevice = (struct LPD8806cfg *) threadlpddevice;
+  
+  logMessage (LOG_DEBUG, "LED Pattern shades starting.\n");
+  
+  clearLED(lpddevice);
+
+  h = 0.0;
+  while(1) {
+    h+=2.0;
+    if(h>=360.0) h=0.0;
+    
+    if ( pthread_mutex_lock(&lpddevice->t_mutex) != 0 )
+      logMessage (LOG_WARNING, "Could not lock LED thread mutex %d\n",lpddevice->t_mutex);
+
+    HSVtoRGB(h,1.0,1.0,&r,&g,&b);
+    //p = &lpddevice->buf.pixels[0];
+    //write_gamma_color(p,(int)(r*255.0),(int)(g*255.0),(int)floor(b*255.0));
+    //send_buffer((int)lpddevice->fd,&lpddevice->buf);
+    
+    for(i=0;i < lpddevice->buf.leds;i++) {
+      write_gamma_color(&lpddevice->buf.pixels[i],(int)(r*255.0),(int)(g*255.0),(int)floor(b*255.0));  
+    }
+    send_buffer((int)lpddevice->fd,&lpddevice->buf);
+    
+    if ( pthread_mutex_unlock(&lpddevice->t_mutex) != 0 )
+      logMessage (LOG_WARNING, "Could not unlock LED thread mutex\n");
+      
+    //usleep(10000);
+    usleep(caculate_delay(&lpddevice->option, &smin, &smax));
+  }
+  
+  // Shouldn't ever get here.
+  logMessage (LOG_DEBUG, "LED Pattern rainbow clearing LEDs.\n");
+  for(i=0;i < lpddevice->buf.leds;i++) {
+    write_gamma_color(&lpddevice->buf.pixels[i],0x00,0x00,0x00);
+  }
+  send_buffer((int)lpddevice->fd,&lpddevice->buf);
+  pthread_exit(0);
+  logMessage (LOG_DEBUG, "LED Pattern rainbow terminated.\n");
+}
+
+
 void *pattern_rainbow(void *threadlpddevice) 
 {
+  int smax = 30000;
+  int smin = 5000;
   lpd8806_color *p;
   //lpd8806_buffer *buf;
   int i;
@@ -486,21 +723,11 @@ void *pattern_rainbow(void *threadlpddevice)
   
   logMessage (LOG_DEBUG, "LED Pattern rainbow starting.\n");
   
-  /* Blank the pixels */
-  if ( pthread_mutex_lock(&lpddevice->t_mutex) != 0 )
-      logMessage (LOG_WARNING, "Could not lock LED thread mutex %d\n",lpddevice->t_mutex);
-      
-  for(i=0;i < lpddevice->buf.leds;i++) {
-    write_gamma_color(&lpddevice->buf.pixels[i],0x00,0x00,0x00);
-  }
-  send_buffer((int)lpddevice->fd,&lpddevice->buf);
-  
-  if ( pthread_mutex_unlock(&lpddevice->t_mutex) != 0 )
-      logMessage (LOG_WARNING, "Could not unlock LED thread mutex\n");
+  clearLED(lpddevice);
 
   h = 0.0;
   while(1) {
-    h+=2.0;
+    h+=1.0;
     if(h>=360.0) h=0.0;
     
     if ( pthread_mutex_lock(&lpddevice->t_mutex) != 0 )
@@ -515,7 +742,8 @@ void *pattern_rainbow(void *threadlpddevice)
     if ( pthread_mutex_unlock(&lpddevice->t_mutex) != 0 )
       logMessage (LOG_WARNING, "Could not unlock LED thread mutex\n");
       
-    usleep(10000);
+    //usleep(10000);
+    usleep(caculate_delay(&lpddevice->option, &smin, &smax));
   }
   
   // Shouldn't ever get here.

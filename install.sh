@@ -2,6 +2,12 @@
 #
 # ROOT=/nas/data/Development/Raspberry/gpiocrtl/test-install
 #
+
+if [ `id -u` != 0 ]; then
+ echo "Must be run as root"
+ exit 2
+fi
+
 ROOT=/
 
 #install
@@ -30,6 +36,11 @@ mkdir -p $CFG
 mkdir -p $WEB
 mkdir -p $BIN
 
+if [ -f $ROOT/etc/init.d/gpioctrld ]; then
+  $ROOT/etc/init.d/gpioctrld stop
+  SERVICE=1
+fi
+
 cp $BUILD/gpioctrl $BIN
 cp $BUILD/gpioctrld $BIN
 cp -r $BUILD/htdocs/* $WEB
@@ -42,6 +53,10 @@ else
 fi
 
 update-rc.d gpioctrld defaults
+
+if [ $SERVICE -eq 1 ]; then
+  $ROOT/etc/init.d/gpioctrld start
+fi
 
 exit
 

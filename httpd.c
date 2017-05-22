@@ -39,6 +39,8 @@ application/xml	.xml
 //extern int readw1(char *device, char *buff);
 extern int readw1(struct ONEWcfg *w1device, char *rtnbuff);
 extern int readw1_for_mh(struct ONEWcfg *w1device, int *rtnbuff);
+extern int readsht31(struct SHT31cfg *sht31device, char *rtnbuff);
+extern int readsht31_for_mh(struct SHT31cfg *sht31device, int *trtnbuff, int *hrtnbuff);
 
 #define ISspace(x) isspace((int)(x))
 
@@ -80,6 +82,8 @@ void accept_request(int client)
   //int cgi = 0;      /* becomes true if server decides this is a CGI program */
   char *query_string = NULL;
 
+logMessage (LOG_DEBUG, "accept_request()");
+
   numchars = get_line(client, buf, sizeof(buf));
   i = 0; j = 0;
   while (!ISspace(buf[j]) && (i < sizeof(method) - 1))
@@ -88,9 +92,9 @@ void accept_request(int client)
     i++; j++;
   }
   method[i] = '\0';
-
   if (strcasecmp(method, "GET") && strcasecmp(method, "POST"))
   {
+    logMessage (LOG_DEBUG, "Bad request ");
     unimplemented(client);
     close(client);
     return;
@@ -262,6 +266,7 @@ int get_line(int sock, char *buf, int size)
   {
     n = recv(sock, &c, 1, 0);
     /* DEBUG printf("%02X\n", c); */
+    //printf("%c", c);
     if (n > 0)
     {
       if (c == '\r')
@@ -280,7 +285,7 @@ int get_line(int sock, char *buf, int size)
     c = '\n';
   }
   buf[i] = '\0';
-
+  //logMessage (LOG_DEBUG, "read %s", buf);
   return(i);
 }
 
@@ -300,13 +305,17 @@ void headers(int client, const char *filename)
   char *ext;
   (void)filename;  /* could use filename to determine file type */
   
-  strcpy(buf, "HTTP/1.0 200 OK\r\n");
+  strcpy(buf, "HTTP/1.1 200 OK\r\n");
   send(client, buf, strlen(buf), 0);
+  //strcpy(buf, "Content-Security-Policy: default-src 'self'; img-src 'self' data: script-src 'self';\r\n");
+  //send(client, buf, strlen(buf), 0);
   strcpy(buf, SERVER_STRING);
   send(client, buf, strlen(buf), 0);
- 
+
+  
   if (filename == NULL) {
-	 sprintf(buf, "Content-Type: text/html\r\n%s", (_gpioconfig_.webcache==TRUE?CACHE:NOCACHE) );
+	 //sprintf(buf, "Content-Type: text/html\r\n%s", (_gpioconfig_.webcache==TRUE?CACHE:NOCACHE) );
+   sprintf(buf, "Content-Type: text/html\r\n%s", NOCACHE);
   } else {
     ext=strrchr(filename,'.');
     if ( (strcasecmp(ext, ".png")) == 0) {
@@ -315,6 +324,8 @@ void headers(int client, const char *filename)
       sprintf(buf, "Content-Type: application/json\r\n%s", NOCACHE);
     } else if ( (strcasecmp(ext, ".jpg")) == 0 || (strcasecmp(ext, ".jpeg")) == 0) {
       sprintf(buf, "Content-Type: image/jpeg\r\n%s", (_gpioconfig_.webcache==TRUE?CACHE:NOCACHE));
+    } else if ( (strcasecmp(ext, ".css")) == 0 || (strcasecmp(ext, ".css")) == 0) {
+      sprintf(buf, "Content-Type: text/css\r\n%s", (_gpioconfig_.webcache==TRUE?CACHE:NOCACHE));
     } else {
       sprintf(buf, "Content-Type: text/html\r\n%s", (_gpioconfig_.webcache==TRUE?CACHE:NOCACHE));
     }
@@ -357,7 +368,8 @@ uint8_t toRGB(char *snum)
 void serve_meteohub_request(int client, char *query)
 {
   char buf[1024];
-  int value = 0;
+  int tvalue = 0;
+  int hvalue = 0;
   int numchars = 1;
   int i;
   
@@ -367,11 +379,27 @@ void serve_meteohub_request(int client, char *query)
     numchars = get_line(client, buf, sizeof(buf));
   }
   
+  headers(client, NULL);
+  
   for (i=0; i < _gpioconfig_.onewiredevices; i++)
   {
-    if (readw1_for_mh(&_gpioconfig_.onewcfg[i], &value) )
+    if (readw1_for_mh(&_gpioconfig_.onewcfg[i], &tvalue) )
     {
-      sprintf(buf,"%d|%s|%s\r\n",value,_gpioconfig_.onewcfg[i].name,_gpioconfig_.onewcfg[i].device);
+      //sprintf(buf,"%d|%s|%s\r\n",tvalue,_gpioconfig_.onewcfg[i].name,_gpioconfig_.onewcfg[i].device);
+      sprintf(buf,"%s %d\r\n",_gpioconfig_.onewcfg[i].mh_name,tvalue);
+      send(client, buf, strlen(buf), 0);
+    }
+  }
+  
+  for (i=0; i < _gpioconfig_.sht31devices; i++)
+  {
+    if (readsht31_for_mh(&_gpioconfig_.sht31cfg[i], &tvalue, &hvalue) )
+    {
+      sprintf(buf,"%s %d %d\r\n",_gpioconfig_.sht31cfg[i].mh_name,tvalue,hvalue);
+      /*
+      sprintf(buf,"%d|%s|temperature|%s\r\n%d|%s|humidity|%s\r\n",
+                   tvalue,_gpioconfig_.sht31cfg[i].name,_gpioconfig_.sht31cfg[i].device,
+                   hvalue,_gpioconfig_.sht31cfg[i].name,_gpioconfig_.sht31cfg[i].device);*/
       send(client, buf, strlen(buf), 0);
     }
   }
@@ -388,6 +416,7 @@ void serve_led_request(int client, char *query)
   int b = -1;
   int pattern = 0;
   int option = 0;
+  int action = -1;
   
   buf[0] = 'A'; buf[1] = '\0';
   while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
@@ -395,10 +424,15 @@ void serve_led_request(int client, char *query)
     numchars = get_line(client, buf, sizeof(buf));
   }
   
+  headers(client, ".json");
+  
   token = strtok(query, "&");
   while( token != NULL ) {
 	  split=strchr(token,'=');
 	  switch(token[0]) {
+      case 'a':
+	      action = atoi(split+1);
+	    break;
   	  case 'r':
 	      r = toRGB(split+1);
 	    break;
@@ -418,27 +452,32 @@ void serve_led_request(int client, char *query)
     token = strtok(NULL, "&");
   }
   
-  if ( (r == -1 || g == -1 || b == -1) && pattern == 0) {
+  // Assume onle 1 LED strip
+  int index = 0;
+  
+  if ( action != 0 && (r == -1 || g == -1 || b == -1) && pattern == 0) {
     logMessage (LOG_DEBUG,"Received BAD LED query:- Red=%d Green=%d, Blue=%d\n",r,g,b);
     cannot_execute(client);
     return;
-  } else {
-    int index = 0;
-    lpd8806worker(&_gpioconfig_.lpd8806cfg[index], (uint8_t*)&pattern, (uint8_t*)&option, (uint8_t*)&r, (uint8_t*)&g, (uint8_t*)&b );
+  //} else {
+  } else if(action != 0) { //If action is not = getstatus
     
+    lpd8806worker(&_gpioconfig_.lpd8806cfg[index], (uint8_t*)&pattern, (uint8_t*)&option, (uint8_t*)&r, (uint8_t*)&g, (uint8_t*)&b );
+  } 
     sprintf(buf, "{ \"title\" : \"%s\",\r\n\"name\" : \"%s\",\r\n", _gpioconfig_.name, _gpioconfig_.name);
 	  send(client, buf, strlen(buf), 0);
-    sprintf(buf, "\"led\" : {\"r\" : %d, \"g\" : %d, \"b\" : %d, \"p\" : %d}\r\n}\r\n", r,g,b,pattern);
+    //sprintf(buf, "\"led\" : {\"r\" : %d, \"g\" : %d, \"b\" : %d, \"p\" : %d}\r\n}\r\n", r,g,b,pattern);
     /* This one is more accurate and should be used over the above next debug session */
-    /*
-    sprintf(buf, "\"led\" : {\"name\" : \"%s\", \"r\" : %d, \"g\" : %d, \"b\" : %d, \"p\" : %d}\r\n}\r\n",
+    
+    sprintf(buf, "\"led\" : {\"name\" : \"%s\", \"r\" : %d, \"g\" : %d, \"b\" : %d, \"p\" : %d, \"o\" : %d}\r\n}\r\n",
                              _gpioconfig_.lpd8806cfg[index].name,
                              _gpioconfig_.lpd8806cfg[index].red,
                              _gpioconfig_.lpd8806cfg[index].green,
                              _gpioconfig_.lpd8806cfg[index].blue,
-                             _gpioconfig_.lpd8806cfg[index].pattern);*/
+                             _gpioconfig_.lpd8806cfg[index].pattern,
+                             _gpioconfig_.lpd8806cfg[index].option);
 	  send(client, buf, strlen(buf), 0);
-  }
+  //}
 }
 
 void serve_gpio_request(int client, char *query)
@@ -481,14 +520,18 @@ void serve_gpio_request(int client, char *query)
   logMessage (LOG_DEBUG,"Received query as Action=%d Pin=%d, status=%d\n",action,pin,status);
   
   if(action == 0) { // Maybe add title to the config in the future, for now just set to name
-    sprintf(buf, "{ \"title\" : \"%s\",\r\n\"name\" : \"%s\",\r\n", _gpioconfig_.name, _gpioconfig_.name);
+    sprintf(buf, "{ \"title\" : \"%s\",\r\n\"name\" : \"%s\"", _gpioconfig_.name, _gpioconfig_.name);
 	  send(client, buf, strlen(buf), 0);
     //for (i=0; _gpioconfig_.gpiocfg[i].pin > -1 ; i++)
     for (i=0; i < _gpioconfig_.pinscfgs ; i++)
     {
-      sprintf(buf, "\"pin%d\" : {\"name\" : \"%s\", \"pin\" : %d, \"status\" : %d, \"inputoutput\" : %d}%s\r\n", 
+      //sprintf(buf, "\"pin%d\" : {\"name\" : \"%s\", \"pin\" : %d, \"status\" : %d, \"inputoutput\" : %d}%s\r\n", 
+      //             _gpioconfig_.gpiocfg[i].pin, _gpioconfig_.gpiocfg[i].name, _gpioconfig_.gpiocfg[i].pin,  digitalRead(_gpioconfig_.gpiocfg[i].pin), 
+      //             _gpioconfig_.gpiocfg[i].input_output, (_gpioconfig_.gpiocfg[i+1].pin != -1)?",":"");
+      send(client, ",\r\n", 3, 0);
+      sprintf(buf, "\"pin%d\" : {\"name\" : \"%s\", \"pin\" : %d, \"status\" : %d, \"inputoutput\" : %d}", 
                    _gpioconfig_.gpiocfg[i].pin, _gpioconfig_.gpiocfg[i].name, _gpioconfig_.gpiocfg[i].pin,  digitalRead(_gpioconfig_.gpiocfg[i].pin), 
-                   _gpioconfig_.gpiocfg[i].input_output, (_gpioconfig_.gpiocfg[i+1].pin != -1)?",":"");
+                   _gpioconfig_.gpiocfg[i].input_output);
 	    send(client, buf, strlen(buf), 0);
     }
     // if W1
@@ -500,15 +543,30 @@ void serve_gpio_request(int client, char *query)
         send(client, buf, strlen(buf), 0);
       }
     }
+    // if sht31
+    for (i=0; i < _gpioconfig_.sht31devices; i++)
+    {
+      if (readsht31(&_gpioconfig_.sht31cfg[i], buf) )
+      {
+        send(client, ",\r\n", 3, 0);
+        send(client, buf, strlen(buf), 0);
+      }
+    }
     // if lpdled
+    
+    logMessage (LOG_DEBUG, "Have %d LED Devices\n",_gpioconfig_.lpd8806devices);
+    
     for (i=0; i < _gpioconfig_.lpd8806devices; i++)
     {
-      sprintf(buf, "\"led\" : {\"name\" : \"%s\", \"r\" : %d, \"g\" : %d, \"b\" : %d, \"p\" : %d}\r\n}\r\n",
+      send(client, ",\r\n", 3, 0);
+      sprintf(buf, "\"led\" : {\"name\" : \"%s\", \"r\" : %d, \"g\" : %d, \"b\" : %d, \"p\" : %d, \"o\" : %d}",
                              _gpioconfig_.lpd8806cfg[i].name,
                              _gpioconfig_.lpd8806cfg[i].red,
                              _gpioconfig_.lpd8806cfg[i].green,
                              _gpioconfig_.lpd8806cfg[i].blue,
-                             _gpioconfig_.lpd8806cfg[i].pattern);
+                             _gpioconfig_.lpd8806cfg[i].pattern,
+                             _gpioconfig_.lpd8806cfg[i].option);
+      send(client, buf, strlen(buf), 0);
     }
     
     sprintf(buf, "}\r\n");
@@ -520,7 +578,7 @@ void serve_gpio_request(int client, char *query)
   }
   else if(action == 2) {
 	  digitalWrite(pin, status);
-    sprintf(buf, "{\r\n\"pin%d\" : {\"pin\" : %d,\n\"status\" : %d}}\r\n", pin, pin, digitalRead(pin));
+    sprintf(buf, "{\r\n\"pin%d\":{\"pin\":%d,\n\"status\" : %d}}\r\n", pin, pin, digitalRead(pin));
 	  send(client, buf, strlen(buf), 0);
   }
 
@@ -570,13 +628,20 @@ int startup(u_short *port)
   if (httpd == -1)
   {
     displayLastSystemError ("'socket' failure");
-    return(EXIT_FAILURE);
+    return(HTTPD_FAILURE);
   }
   
   int opt=1;    /* option is to be on/TRUE or off/FALSE */
   setsockopt(httpd,SOL_SOCKET,SO_REUSEADDR,(char *)&opt,sizeof(opt));	// Don't care if this fails, it's really only for restarting probram quickly
-
- 
+  
+  struct timeval timeout;      
+  timeout.tv_sec = 2;
+  timeout.tv_usec = 0;
+      
+  if (setsockopt (httpd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    logMessage (LOG_WARNING, "Unable to set socket receive timeout, potential hanning!");
+                  
+                  
   memset(&name, 0, sizeof(name));
   name.sin_family = AF_INET;
   name.sin_port = htons(*port);
@@ -589,11 +654,11 @@ int startup(u_short *port)
   {
     if (i < 5) {
       //displayLastSystemError ("'bind' failure, waiting!");
-      logMessage (LOG_WARNING, "'bind failure, waiting!");
+      logMessage (LOG_WARNING, "'bind' failure, waiting!");
       sleep(2);
     } else {
       displayLastSystemError ("'bind' failure, giving up!");
-      return(EXIT_FAILURE);
+      return(HTTPD_FAILURE);
     }
     i++;
   }
@@ -604,7 +669,7 @@ int startup(u_short *port)
     if (getsockname(httpd, (struct sockaddr *)&name, (socklen_t *)&namelen) == -1)
     {
       displayLastSystemError ("'socketname' failure");
-      return(EXIT_FAILURE);
+      return(HTTPD_FAILURE);
     }
       
     *port = ntohs(name.sin_port);
@@ -613,10 +678,10 @@ int startup(u_short *port)
   if (listen(httpd, 5) < 0)
   {
     displayLastSystemError ("'listen' failure");
-    return(EXIT_FAILURE);
+    return(HTTPD_FAILURE);
   }
 
-logMessage (LOG_DEBUG, "returning()");
+logMessage (LOG_DEBUG, "returning from http startup()");
   
   return(httpd);
 }
